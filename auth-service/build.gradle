@@ -11,4 +11,7 @@ dependencies {
     
     // Phase 3b additions
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+
+    // Phase 3c additions
+    implementation 'org.springframework.boot:spring-boot-starter-mail'
 }

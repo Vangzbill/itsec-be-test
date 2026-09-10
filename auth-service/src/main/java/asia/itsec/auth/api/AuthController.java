@@ -1,8 +1,6 @@
 package asia.itsec.auth.api;
 
-import asia.itsec.auth.application.AuthService;
-import asia.itsec.auth.application.LoginRequest;
-import asia.itsec.auth.application.RegisterRequest;
+import asia.itsec.auth.application.*;
 import asia.itsec.auth.domain.User;
 import asia.itsec.shared.payload.ApiResponse;
 import jakarta.validation.Valid;
@@ -30,12 +28,22 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<ApiResponse<User>> login(@Valid @RequestBody LoginRequest request) {
-        User user = authService.login(request);
-        return ResponseEntity.ok(ApiResponse.<User>builder()
+    public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {
+        LoginResponse response = authService.login(request);
+        return ResponseEntity.ok(ApiResponse.<LoginResponse>builder()
+                .success(true)
+                .message("OTP sent to email")
+                .data(response)
+                .build());
+    }
+
+    @PostMapping("/verify-otp")
+    public ResponseEntity<ApiResponse<TokenResponse>> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
+        TokenResponse response = authService.verifyOtp(request);
+        return ResponseEntity.ok(ApiResponse.<TokenResponse>builder()
                 .success(true)
                 .message("Login successful")
-                .data(user)
+                .data(response)
                 .build());
     }
 }

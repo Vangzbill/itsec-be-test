@@ -1,14 +1,12 @@
 package asia.itsec.auth.application;
 
-import asia.itsec.auth.domain.LoginAttemptRepository;
-import asia.itsec.auth.domain.PasswordEncoder;
-import asia.itsec.auth.domain.Role;
-import asia.itsec.auth.domain.User;
-import asia.itsec.auth.domain.UserRepository;
+import asia.itsec.auth.domain.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.security.SecureRandom;
 import java.util.Set;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -17,6 +15,10 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final LoginAttemptRepository loginAttemptRepository;
+    private final OtpSender otpSender;
+    private final OtpRepository otpRepository;
+    
+    private final SecureRandom secureRandom = new SecureRandom();
 
     public User register(RegisterRequest request) {
         if (userRepository.existsByUsername(request.getUsername())) {
@@ -38,7 +40,7 @@ public class AuthService {
         return userRepository.save(user);
     }
 
-    public User login(LoginRequest request) {
+    public LoginResponse login(LoginRequest request) {
         String genericFailureMessage = "Invalid credentials";
 
         User user = userRepository.findByUsernameOrEmail(request.getUsernameOrEmail())
@@ -54,6 +56,20 @@ public class AuthService {
         }
 
         loginAttemptRepository.resetAttempts(user.getId());
-        return user;
+
+        String tempToken = UUID.randomUUID().toString();
+        String otpCode = String.format("%06d", secureRandom.nextInt(1000000));
+        
+        otpRepository.save(tempToken, passwordEncoder.encode(otpCode), user.getId());
+        otpSender.sendOtp(user.getEmail(), otpCode);
+
+        return new LoginResponse(tempToken);
+    }
+
+    public TokenResponse verifyOtp(VerifyOtpRequest request) {
+        String userId = otpRepository.verify(request.getTemporaryToken(), request.getCode());
+        
+        // Return dummy tokens until JWT is implemented in Phase 3d
+        return new TokenResponse("dummy-access-token-for-" + userId, "dummy-refresh-token");
     }
 }
