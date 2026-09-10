@@ -42,7 +42,17 @@ public class AuthController {
         TokenResponse response = authService.verifyOtp(request);
         return ResponseEntity.ok(ApiResponse.<TokenResponse>builder()
                 .success(true)
-                .message("Login successful")
+                .message("OTP verification successful")
+                .data(response)
+                .build());
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<ApiResponse<TokenResponse>> refresh(@Valid @RequestBody RefreshTokenRequest request) {
+        TokenResponse response = authService.refreshToken(request);
+        return ResponseEntity.ok(ApiResponse.<TokenResponse>builder()
+                .success(true)
+                .message("Token refresh successful")
                 .data(response)
                 .build());
     }

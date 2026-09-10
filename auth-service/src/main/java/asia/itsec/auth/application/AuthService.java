@@ -4,7 +4,13 @@ import asia.itsec.auth.domain.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Base64;
 import java.util.Set;
 import java.util.UUID;
 
@@ -17,6 +23,8 @@ public class AuthService {
     private final LoginAttemptRepository loginAttemptRepository;
     private final OtpSender otpSender;
     private final OtpRepository otpRepository;
+    private final TokenProvider tokenProvider;
+    private final RefreshTokenRepository refreshTokenRepository;
     
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -69,7 +77,54 @@ public class AuthService {
     public TokenResponse verifyOtp(VerifyOtpRequest request) {
         String userId = otpRepository.verify(request.getTemporaryToken(), request.getCode());
         
-        // Return dummy tokens until JWT is implemented in Phase 3d
-        return new TokenResponse("dummy-access-token-for-" + userId, "dummy-refresh-token");
+        User user = userRepository.findByUsernameOrEmail(userId)
+                .orElseThrow(() -> new SecurityException("User not found"));
+                
+        return issueTokens(user);
+    }
+
+    public TokenResponse refreshToken(RefreshTokenRequest request) {
+        String hashedToken = hashToken(request.getRefreshToken());
+        
+        RefreshToken refreshToken = refreshTokenRepository.findByTokenHash(hashedToken)
+                .orElseThrow(() -> new SecurityException("Invalid refresh token"));
+                
+        if (!refreshToken.isValid()) {
+            throw new SecurityException("Refresh token is expired or revoked");
+        }
+        
+        User user = userRepository.findByUsernameOrEmail(refreshToken.getUserId())
+                .orElseThrow(() -> new SecurityException("User not found"));
+                
+        String newAccessToken = tokenProvider.generateAccessToken(user);
+        
+        return new TokenResponse(newAccessToken, request.getRefreshToken());
+    }
+    
+    private TokenResponse issueTokens(User user) {
+        String accessToken = tokenProvider.generateAccessToken(user);
+        String rawRefreshToken = tokenProvider.generateRefreshToken();
+        
+        RefreshToken refreshToken = RefreshToken.builder()
+                .id(UUID.randomUUID().toString())
+                .userId(user.getId())
+                .tokenHash(hashToken(rawRefreshToken))
+                .expiresAt(Instant.now().plus(7, ChronoUnit.DAYS))
+                .revoked(false)
+                .build();
+                
+        refreshTokenRepository.save(refreshToken);
+        
+        return new TokenResponse(accessToken, rawRefreshToken);
+    }
+    
+    private String hashToken(String rawToken) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(rawToken.getBytes(StandardCharsets.UTF_8));
+            return Base64.getEncoder().encodeToString(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        }
     }
 }
