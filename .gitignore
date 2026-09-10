@@ -1,0 +1,9 @@
+NOTES.md
+target/
+build/
+.env
+.idea/
+.DS_Store
+__pycache__/
+*.pyc
+.pytest_cache/
