@@ -2,9 +2,9 @@ package asia.itsec.auth.infrastructure;
 
 import asia.itsec.auth.domain.TokenProvider;
 import asia.itsec.auth.domain.User;
+import asia.itsec.shared.security.JwtUtils;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
-import io.jsonwebtoken.security.Keys;
 import org.springframework.stereotype.Component;
 
 import java.security.Key;
@@ -16,7 +16,7 @@ import java.util.stream.Collectors;
 @Component
 public class JwtTokenProviderAdapter implements TokenProvider {
 
-    private final Key key = Keys.secretKeyFor(SignatureAlgorithm.HS256);
+    private final Key key = JwtUtils.getKey();
     private final long ACCESS_TOKEN_VALIDITY_MS = 15 * 60 * 1000; // 15 minutes
 
     @Override
