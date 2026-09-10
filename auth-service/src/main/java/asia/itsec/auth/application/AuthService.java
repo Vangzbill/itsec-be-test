@@ -25,6 +25,7 @@ public class AuthService {
     private final OtpRepository otpRepository;
     private final TokenProvider tokenProvider;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final TokenDenylistRepository tokenDenylistRepository;
     
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -99,6 +100,17 @@ public class AuthService {
         String newAccessToken = tokenProvider.generateAccessToken(user);
         
         return new TokenResponse(newAccessToken, request.getRefreshToken());
+    }
+    
+    public void logout(String accessToken, LogoutRequest request) {
+        long remainingSeconds = tokenProvider.getRemainingValiditySeconds(accessToken);
+        if (remainingSeconds > 0) {
+            tokenDenylistRepository.denylist(accessToken, remainingSeconds);
+        }
+
+        String hashedToken = hashToken(request.getRefreshToken());
+        refreshTokenRepository.findByTokenHash(hashedToken)
+                .ifPresent(rt -> refreshTokenRepository.revoke(rt.getId()));
     }
     
     private TokenResponse issueTokens(User user) {

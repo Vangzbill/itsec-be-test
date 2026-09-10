@@ -1,6 +1,8 @@
 package asia.itsec.auth.api;
 
 import asia.itsec.auth.application.*;
+import asia.itsec.auth.domain.TokenDenylistRepository;
+import asia.itsec.auth.domain.TokenProvider;
 import asia.itsec.auth.domain.User;
 import asia.itsec.shared.payload.ApiResponse;
 import jakarta.validation.Valid;
@@ -15,6 +17,8 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
+    private final TokenProvider tokenProvider;
+    private final TokenDenylistRepository tokenDenylistRepository;
 
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<User>> register(@Valid @RequestBody RegisterRequest request) {
@@ -54,6 +58,29 @@ public class AuthController {
                 .success(true)
                 .message("Token refresh successful")
                 .data(response)
+                .build());
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<Void>> logout(
+            @RequestHeader("Authorization") String authHeader,
+            @Valid @RequestBody LogoutRequest request) {
+
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        String token = authHeader.substring(7);
+
+        if (!tokenProvider.validateToken(token) || tokenDenylistRepository.isDenylisted(token)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        authService.logout(token, request);
+
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+                .success(true)
+                .message("Logged out successfully")
                 .build());
     }
 }
