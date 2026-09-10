@@ -4,6 +4,12 @@ server:
 spring:
   application:
     name: audit-service
+  data:
+    mongodb:
+      uri: mongodb://${DB_HOST:localhost}:27017/itsec
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
 
 management:
   endpoints:
