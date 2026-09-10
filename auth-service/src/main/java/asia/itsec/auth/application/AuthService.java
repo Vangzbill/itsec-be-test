@@ -1,5 +1,6 @@
 package asia.itsec.auth.application;
 
+import asia.itsec.auth.domain.LoginAttemptRepository;
 import asia.itsec.auth.domain.PasswordEncoder;
 import asia.itsec.auth.domain.Role;
 import asia.itsec.auth.domain.User;
@@ -15,6 +16,7 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final LoginAttemptRepository loginAttemptRepository;
 
     public User register(RegisterRequest request) {
         if (userRepository.existsByUsername(request.getUsername())) {
@@ -42,10 +44,16 @@ public class AuthService {
         User user = userRepository.findByUsernameOrEmail(request.getUsernameOrEmail())
                 .orElseThrow(() -> new SecurityException(genericFailureMessage));
 
+        if (loginAttemptRepository.isLocked(user.getId())) {
+            throw new AccountLockedException(loginAttemptRepository.getLockoutRemainingSeconds(user.getId()));
+        }
+
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+            loginAttemptRepository.recordFailedAttempt(user.getId());
             throw new SecurityException(genericFailureMessage);
         }
 
+        loginAttemptRepository.resetAttempts(user.getId());
         return user;
     }
 }
