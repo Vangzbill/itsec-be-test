@@ -1,5 +1,6 @@
 package asia.itsec.auth.application;
 
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
@@ -11,6 +12,7 @@ public class UpdateUserRequest {
     private String fullname;
 
     @NotBlank
+    @Email
     private String email;
 
     private Set<String> roles;
