@@ -26,7 +26,8 @@ public class AuthService {
     private final TokenProvider tokenProvider;
     private final RefreshTokenRepository refreshTokenRepository;
     private final TokenDenylistRepository tokenDenylistRepository;
-    
+    private final TrustedDeviceRepository trustedDeviceRepository;
+
     private final SecureRandom secureRandom = new SecureRandom();
 
     public User register(RegisterRequest request) {
@@ -38,7 +39,7 @@ public class AuthService {
         }
 
         User user = User.builder()
-                .id(request.getId())
+                .id(UUID.randomUUID().toString())
                 .fullname(request.getFullname())
                 .username(request.getUsername())
                 .email(request.getEmail())
@@ -66,22 +67,31 @@ public class AuthService {
 
         loginAttemptRepository.resetAttempts(user.getId());
 
+        String rememberToken = request.getRememberToken();
+        if (rememberToken != null && !rememberToken.isBlank()
+                && user.getId().equals(trustedDeviceRepository.resolve(rememberToken))) {
+            TokenResponse tokens = issueTokens(user);
+            return new LoginResponse(null, tokens.getAccessToken(), tokens.getRefreshToken());
+        }
+
         String tempToken = UUID.randomUUID().toString();
         String otpCode = String.format("%06d", secureRandom.nextInt(1000000));
-        
+
         otpRepository.save(tempToken, passwordEncoder.encode(otpCode), user.getId());
         otpSender.sendOtp(user.getEmail(), otpCode);
 
-        return new LoginResponse(tempToken);
+        return new LoginResponse(tempToken, null, null);
     }
 
     public TokenResponse verifyOtp(VerifyOtpRequest request) {
         String userId = otpRepository.verify(request.getTemporaryToken(), request.getCode());
-        
-        User user = userRepository.findByUsernameOrEmail(userId)
+
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> new SecurityException("User not found"));
-                
-        return issueTokens(user);
+
+        TokenResponse tokens = issueTokens(user);
+        String rememberToken = trustedDeviceRepository.issue(user.getId());
+        return new TokenResponse(tokens.getAccessToken(), tokens.getRefreshToken(), rememberToken);
     }
 
     public TokenResponse refreshToken(RefreshTokenRequest request) {
@@ -94,12 +104,12 @@ public class AuthService {
             throw new SecurityException("Refresh token is expired or revoked");
         }
         
-        User user = userRepository.findByUsernameOrEmail(refreshToken.getUserId())
+        User user = userRepository.findById(refreshToken.getUserId())
                 .orElseThrow(() -> new SecurityException("User not found"));
                 
         String newAccessToken = tokenProvider.generateAccessToken(user);
-        
-        return new TokenResponse(newAccessToken, request.getRefreshToken());
+
+        return new TokenResponse(newAccessToken, request.getRefreshToken(), null);
     }
     
     public void logout(String accessToken, LogoutRequest request) {
@@ -126,8 +136,8 @@ public class AuthService {
                 .build();
                 
         refreshTokenRepository.save(refreshToken);
-        
-        return new TokenResponse(accessToken, rawRefreshToken);
+
+        return new TokenResponse(accessToken, rawRefreshToken, null);
     }
     
     private String hashToken(String rawToken) {

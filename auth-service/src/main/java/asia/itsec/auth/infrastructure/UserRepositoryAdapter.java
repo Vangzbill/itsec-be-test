@@ -36,6 +36,11 @@ public class UserRepositoryAdapter implements UserRepository {
     }
 
     @Override
+    public Optional<User> findById(String id) {
+        return jpaUserRepository.findById(id).map(UserEntity::toDomain);
+    }
+
+    @Override
     public Optional<User> findByUsernameOrEmail(String identifier) {
         return jpaUserRepository.findByUsernameOrEmail(identifier, identifier)
                 .map(UserEntity::toDomain);

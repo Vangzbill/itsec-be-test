@@ -1,0 +1,182 @@
+{
+  "info": {
+    "name": "ITSEC Backend",
+    "description": "Auth (OTP+JWT), Article (RBAC), Audit flow. Semua request lewat API Gateway di port 8080.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "tempToken", "value": "" },
+    { "key": "otpCode", "value": "" },
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "rememberToken", "value": "" },
+    { "key": "articleId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. Register",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/auth/register",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullname\": \"Test User\",\n  \"username\": \"testuser\",\n  \"email\": \"testuser@example.com\",\n  \"password\": \"Passw0rd!\"\n}"
+        }
+      }
+    },
+    {
+      "name": "2. Login (sends OTP via Mailpit, or skips it if rememberToken is trusted)",
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "const data = pm.response.json().data;",
+          "if (data.temporaryToken) {",
+          "  pm.collectionVariables.set('tempToken', data.temporaryToken);",
+          "  console.log('tempToken saved. Cek OTP code di http://localhost:8025');",
+          "} else {",
+          "  pm.collectionVariables.set('accessToken', data.accessToken);",
+          "  pm.collectionVariables.set('refreshToken', data.refreshToken);",
+          "  console.log('Device trusted, OTP di-skip. accessToken langsung terisi.');",
+          "}"
+        ]}
+      }],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/auth/login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"usernameOrEmail\": \"testuser\",\n  \"password\": \"Passw0rd!\",\n  \"rememberToken\": \"{{rememberToken}}\"\n}"
+        }
+      }
+    },
+    {
+      "name": "3. Verify OTP (isi otpCode manual dari Mailpit dulu)",
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "const data = pm.response.json().data;",
+          "pm.collectionVariables.set('accessToken', data.accessToken);",
+          "pm.collectionVariables.set('refreshToken', data.refreshToken);",
+          "pm.collectionVariables.set('rememberToken', data.rememberToken);"
+        ]}
+      }],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/auth/verify-otp",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"temporaryToken\": \"{{tempToken}}\",\n  \"code\": \"{{otpCode}}\"\n}"
+        }
+      }
+    },
+    {
+      "name": "4. Refresh Token",
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "const data = pm.response.json().data;",
+          "pm.collectionVariables.set('accessToken', data.accessToken);",
+          "pm.collectionVariables.set('refreshToken', data.refreshToken);"
+        ]}
+      }],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/auth/refresh",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+        }
+      }
+    },
+    {
+      "name": "5. Logout",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": "{{baseUrl}}/auth/logout",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+        }
+      }
+    },
+    {
+      "name": "6. Create Article (butuh role EDITOR/SUPER_ADMIN)",
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "if (pm.response.code === 201) {",
+          "  pm.collectionVariables.set('articleId', pm.response.json().data.id);",
+          "}"
+        ]}
+      }],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": "{{baseUrl}}/articles",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Judul Artikel\",\n  \"content\": \"Isi artikel...\"\n}"
+        }
+      }
+    },
+    {
+      "name": "7. Get All Articles",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/articles"
+      }
+    },
+    {
+      "name": "8. Get Article by ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/articles/{{articleId}}"
+      }
+    },
+    {
+      "name": "9. Update Article (owner atau SUPER_ADMIN)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": "{{baseUrl}}/articles/{{articleId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Judul Diupdate\",\n  \"content\": \"Isi diupdate...\"\n}"
+        }
+      }
+    },
+    {
+      "name": "10. Delete Article (butuh role SUPER_ADMIN)",
+      "request": {
+        "method": "DELETE",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+        "url": "{{baseUrl}}/articles/{{articleId}}"
+      }
+    },
+    {
+      "name": "11. Get Audit Logs (butuh role SUPER_ADMIN)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+        "url": "{{baseUrl}}/audit/logs"
+      }
+    }
+  ]
+}
