@@ -1,7 +1,11 @@
 package asia.itsec.auth.application;
 
 import asia.itsec.auth.domain.*;
+import asia.itsec.shared.event.AuditEvent;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -11,8 +15,10 @@ import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -27,8 +33,26 @@ public class AuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final TokenDenylistRepository tokenDenylistRepository;
     private final TrustedDeviceRepository trustedDeviceRepository;
+    private final EventPublisher eventPublisher;
+    private final HttpServletRequest httpServletRequest;
 
     private final SecureRandom secureRandom = new SecureRandom();
+
+    private AuditEvent buildAuditEvent(String action, String actorId, String actorUsername, String status) {
+        return AuditEvent.builder()
+                .actorId(actorId)
+                .actorUsername(actorUsername)
+                .action(action)
+                .entityType("USER")
+                .entityId(actorId)
+                .ipAddress(httpServletRequest.getRemoteAddr())
+                .userAgent(httpServletRequest.getHeader("User-Agent"))
+                .requestPath(httpServletRequest.getRequestURI())
+                .httpMethod(httpServletRequest.getMethod())
+                .status(status)
+                .createdAt(Instant.now())
+                .build();
+    }
 
     public User register(RegisterRequest request) {
         if (userRepository.existsByUsername(request.getUsername())) {
@@ -71,6 +95,7 @@ public class AuthService {
         if (rememberToken != null && !rememberToken.isBlank()
                 && user.getId().equals(trustedDeviceRepository.resolve(rememberToken))) {
             TokenResponse tokens = issueTokens(user);
+            eventPublisher.publish(buildAuditEvent("LOGIN_SUCCESS", user.getId(), user.getUsername(), "SUCCESS"));
             return new LoginResponse(null, tokens.getAccessToken(), tokens.getRefreshToken());
         }
 
@@ -91,7 +116,41 @@ public class AuthService {
 
         TokenResponse tokens = issueTokens(user);
         String rememberToken = trustedDeviceRepository.issue(user.getId());
+        eventPublisher.publish(buildAuditEvent("LOGIN_SUCCESS", user.getId(), user.getUsername(), "SUCCESS"));
         return new TokenResponse(tokens.getAccessToken(), tokens.getRefreshToken(), rememberToken);
+    }
+
+    public List<User> listUsers() {
+        return userRepository.findAll();
+    }
+
+    public User updateUser(String id, UpdateUserRequest request) {
+        User existing = userRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        Set<Role> roles = request.getRoles() != null && !request.getRoles().isEmpty()
+                ? request.getRoles().stream().map(Role::valueOf).collect(Collectors.toSet())
+                : existing.getRoles();
+
+        User updated = User.builder()
+                .id(existing.getId())
+                .fullname(request.getFullname())
+                .username(existing.getUsername())
+                .email(request.getEmail())
+                .passwordHash(existing.getPasswordHash())
+                .roles(roles)
+                .build();
+
+        User saved = userRepository.save(updated);
+        eventPublisher.publish(buildAuditEvent("USER_UPDATED", id, saved.getUsername(), "SUCCESS"));
+        return saved;
+    }
+
+    public void deleteUser(String id) {
+        User existing = userRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        userRepository.deleteById(id);
+        eventPublisher.publish(buildAuditEvent("USER_DELETED", id, existing.getUsername(), "SUCCESS"));
     }
 
     public TokenResponse refreshToken(RefreshTokenRequest request) {
@@ -121,6 +180,12 @@ public class AuthService {
         String hashedToken = hashToken(request.getRefreshToken());
         refreshTokenRepository.findByTokenHash(hashedToken)
                 .ifPresent(rt -> refreshTokenRepository.revoke(rt.getId()));
+
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null) {
+            String username = auth.getDetails() != null ? auth.getDetails().toString() : null;
+            eventPublisher.publish(buildAuditEvent("LOGOUT", auth.getName(), username, "SUCCESS"));
+        }
     }
     
     private TokenResponse issueTokens(User user) {

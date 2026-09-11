@@ -9,4 +9,6 @@ public class CreateArticleCommand {
     private String title;
     @NotBlank
     private String content;
+
+    private boolean isPublic = true;
 }

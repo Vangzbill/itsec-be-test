@@ -12,6 +12,7 @@ public class Article {
     private String title;
     private String content;
     private String authorId;
+    private boolean isPublic;
     private Instant createdAt;
     private Instant updatedAt;
 }

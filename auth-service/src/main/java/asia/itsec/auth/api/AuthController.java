@@ -9,7 +9,10 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/auth")
@@ -82,5 +85,32 @@ public class AuthController {
                 .success(true)
                 .message("Logged out successfully")
                 .build());
+    }
+
+    @GetMapping("/users")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<List<User>>> listUsers() {
+        return ResponseEntity.ok(ApiResponse.<List<User>>builder()
+                .success(true)
+                .message("Users retrieved successfully")
+                .data(authService.listUsers())
+                .build());
+    }
+
+    @PutMapping("/users/{id}")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<User>> updateUser(@PathVariable String id, @Valid @RequestBody UpdateUserRequest request) {
+        return ResponseEntity.ok(ApiResponse.<User>builder()
+                .success(true)
+                .message("User updated successfully")
+                .data(authService.updateUser(id, request))
+                .build());
+    }
+
+    @DeleteMapping("/users/{id}")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<Void> deleteUser(@PathVariable String id) {
+        authService.deleteUser(id);
+        return ResponseEntity.noContent().build();
     }
 }

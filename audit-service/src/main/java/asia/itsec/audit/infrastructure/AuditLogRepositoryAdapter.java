@@ -12,17 +12,17 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AuditLogRepositoryAdapter implements AuditLogRepository {
 
-    private final MongoAuditLogRepository mongoRepository;
+    private final JpaAuditLogRepository jpaRepository;
 
     @Override
     public AuditLog save(AuditLog auditLog) {
-        return mongoRepository.save(AuditLogDocument.fromDomain(auditLog)).toDomain();
+        return jpaRepository.save(AuditLogEntity.fromDomain(auditLog)).toDomain();
     }
 
     @Override
     public List<AuditLog> findAll() {
-        return mongoRepository.findAll().stream()
-                .map(AuditLogDocument::toDomain)
+        return jpaRepository.findAll().stream()
+                .map(AuditLogEntity::toDomain)
                 .collect(Collectors.toList());
     }
 }

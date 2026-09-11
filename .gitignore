@@ -12,3 +12,6 @@ gradle/
 gradlew 
 gradlew.bat
 run-all.bat
+start-all-bg.bat
+stop-all.bat
+logs/

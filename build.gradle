@@ -11,6 +11,7 @@ allprojects {
 
 subprojects {
     apply plugin: 'java'
+    apply plugin: 'jacoco'
     apply plugin: 'org.springframework.boot'
     apply plugin: 'io.spring.dependency-management'
 
@@ -27,8 +28,68 @@ subprojects {
     dependencies {
         compileOnly 'org.projectlombok:lombok'
         annotationProcessor 'org.projectlombok:lombok'
-        
+
         // Actuator for /health endpoints
         implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+        testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    }
+
+    test {
+        useJUnitPlatform()
+        finalizedBy jacocoTestReport
+    }
+
+    def coverageExcludes = [
+        '**/*Application.class',
+        '**/*Config.class',
+        '**/*Configuration.class',
+        '**/domain/*.class',
+        '**/*Entity.class',
+        '**/*Document.class',
+        '**/*Request.class',
+        '**/*Response.class',
+        '**/*Command.class',
+        '**/*Exception.class',
+        '**/*ExceptionHandler.class',
+        '**/*Builder.class',
+        '**/Jpa*Repository.class',
+        '**/Mongo*Repository.class',
+        '**/HealthController.class',
+        'asia/itsec/shared/payload/**',
+        'asia/itsec/shared/event/**',
+    ]
+
+    jacocoTestReport {
+        dependsOn test
+        reports {
+            xml.required = true
+            html.required = true
+        }
+        classDirectories.setFrom(
+            files(classDirectories.files.collect {
+                fileTree(dir: it, exclude: coverageExcludes)
+            })
+        )
+    }
+
+    jacocoTestCoverageVerification {
+        dependsOn test
+        classDirectories.setFrom(
+            files(classDirectories.files.collect {
+                fileTree(dir: it, exclude: coverageExcludes)
+            })
+        )
+        violationRules {
+            rule {
+                limit {
+                    minimum = 0.80
+                }
+            }
+        }
+    }
+
+    if (project.name in ['auth-service', 'article-service', 'audit-service']) {
+        check.dependsOn jacocoTestCoverageVerification
     }
 }

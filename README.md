@@ -16,7 +16,7 @@ Client
 └──────┬──────┘                                        ▼
        │ routes                               ┌─────────────────┐
   ┌────┼────────────────┐                     │  Audit Service  │
-  ▼    ▼                ▼                     │  :8083 MongoDB  │
+  ▼    ▼                ▼                     │  :8083  PgSQL   │
 ┌────────┐  ┌─────────────┐                   └─────────────────┘
 │  Auth  │  │   Article   │
 │ :8081  │  │   :8082     │
@@ -46,7 +46,7 @@ Setiap service distruktur dengan 4 layer:
 ├── api-gateway/             # Spring Cloud Gateway + rate limiting
 ├── auth-service/            # Registrasi, login, MFA OTP, JWT, refresh token
 ├── article-service/         # CRUD artikel dengan RBAC
-├── audit-service/           # Subscriber event Redis, persistensi ke MongoDB
+├── audit-service/           # Subscriber event Redis, persistensi ke PostgreSQL
 ├── docker/                  # SQL init script untuk PostgreSQL
 ├── postman/                 # Postman collection siap pakai
 ├── python-challenges/       # Task 1: coding challenges Python
@@ -105,29 +105,38 @@ Semua request melewati gateway di `http://localhost:8080`.
 
 ### Authentication
 
-| Method | Path               | Auth          | Deskripsi                               |
-| ------ | ------------------ | ------------- | --------------------------------------- |
-| `POST` | `/auth/register`   | —             | Registrasi user baru                    |
-| `POST` | `/auth/login`      | —             | Login; jika valid → kirim OTP ke email  |
-| `POST` | `/auth/verify-otp` | —             | Verifikasi OTP → return JWT             |
-| `POST` | `/auth/refresh`    | —             | Tukar refresh token → access token baru |
-| `POST` | `/auth/logout`     | JWT           | Revoke token                            |
-| `GET`  | `/auth/users`      | `SUPER_ADMIN` | Daftar semua user                       |
+| Method   | Path               | Auth          | Deskripsi                               |
+| -------- | ------------------ | ------------- | --------------------------------------- |
+| `POST`   | `/auth/register`   | —             | Registrasi user baru                    |
+| `POST`   | `/auth/login`      | —             | Login; jika valid → kirim OTP ke email  |
+| `POST`   | `/auth/verify-otp` | —             | Verifikasi OTP → return JWT             |
+| `POST`   | `/auth/refresh`    | —             | Tukar refresh token → access token baru |
+| `POST`   | `/auth/logout`     | JWT           | Revoke token                            |
+| `GET`    | `/auth/users`      | `SUPER_ADMIN` | Daftar semua user                       |
+| `PUT`    | `/auth/users/{id}` | `SUPER_ADMIN` | Update fullname/email/roles user        |
+| `DELETE` | `/auth/users/{id}` | `SUPER_ADMIN` | Hapus user                              |
+
+Catatan: user baru dari `/auth/register` selalu dapat role `VIEWER` (default, self-service escalation dicegah). Promosi ke `EDITOR`/`CONTRIBUTOR`/`SUPER_ADMIN` cuma bisa lewat `PUT /auth/users/{id}` oleh `SUPER_ADMIN`.
+
+Login mendukung **remember-device**: kirim `rememberToken` (dari hasil `verify-otp` sebelumnya) di body `/auth/login` — kalau valid & cocok device, OTP di-skip dan langsung dapat access/refresh token.
 
 ### Articles
 
-| Method   | Path             | Auth                                   | Deskripsi         |
-| -------- | ---------------- | -------------------------------------- | ----------------- |
-| `POST`   | `/articles`      | `SUPER_ADMIN`, `EDITOR`, `CONTRIBUTOR` | Buat artikel baru |
-| `GET`    | `/articles/{id}` | — (publik) / JWT (private)             | Lihat artikel     |
-| `PUT`    | `/articles/{id}` | Owner atau `SUPER_ADMIN`/`EDITOR`      | Update artikel    |
-| `DELETE` | `/articles/{id}` | Owner `EDITOR` atau `SUPER_ADMIN`      | Hapus artikel     |
+| Method   | Path             | Auth                                              | Deskripsi                                                   |
+| -------- | ---------------- | ------------------------------------------------- | ----------------------------------------------------------- |
+| `POST`   | `/articles`      | `SUPER_ADMIN`, `EDITOR`, `CONTRIBUTOR`            | Buat artikel baru (CONTRIBUTOR hanya untuk dirinya sendiri) |
+| `GET`    | `/articles`      | — (publik, filter `isPublic`) / JWT               | Daftar artikel                                              |
+| `GET`    | `/articles/{id}` | — (publik jika `isPublic`) / JWT                  | Lihat artikel                                               |
+| `PUT`    | `/articles/{id}` | Owner (`EDITOR`/`CONTRIBUTOR`) atau `SUPER_ADMIN` | Update artikel milik sendiri                                |
+| `DELETE` | `/articles/{id}` | Owner `EDITOR` atau `SUPER_ADMIN`                 | Hapus artikel (CONTRIBUTOR tidak bisa)                      |
+
+`VIEWER` (dan anonim) hanya bisa lihat artikel dengan `isPublic = true`. `EDITOR`/`SUPER_ADMIN` lihat semua.
 
 ### Audit
 
 | Method | Path          | Auth          | Deskripsi             |
 | ------ | ------------- | ------------- | --------------------- |
-| `GET`  | `/audit-logs` | `SUPER_ADMIN` | Lihat semua log audit |
+| `GET`  | `/audit/logs` | `SUPER_ADMIN` | Lihat semua log audit |
 
 ---
 
@@ -143,10 +152,14 @@ POST /auth/login
 POST /auth/verify-otp  { temporaryToken, code }
   → validasi OTP dari Redis
   → issue JWT access token (15 menit) + refresh token (7 hari, SHA-256 di PgSQL)
-  → return { accessToken, refreshToken }
+  → issue rememberToken (30 hari, di Redis) untuk skip OTP di device yang sama
+  → return { accessToken, refreshToken, rememberToken }
+
+POST /auth/login  { usernameOrEmail, password, rememberToken? }
+  → kalau rememberToken valid & cocok user → langsung { accessToken, refreshToken }, OTP di-skip
 ```
 
-**Proteksi brute-force:** setelah 5 gagal login → akun dikunci 30 menit via Redis TTL.
+**Proteksi brute-force:** setelah 5 gagal login (window 10 menit) → akun dikunci 30 menit via Redis TTL.
 
 ---
 
@@ -161,11 +174,11 @@ POST /auth/verify-otp  { temporaryToken, code }
 
 **Schema `article` (PostgreSQL)**
 
-- `articles` — konten artikel; `author_id` tidak punya FK lintas schema (menjaga batas service)
+- `articles` — konten artikel + `is_public`; `author_id` tidak punya FK lintas schema (menjaga batas service)
 
-**Schema `audit` (MongoDB)**
+**Schema `audit` (PostgreSQL)**
 
-- `audit_logs` — dokumen append-only: actor, action, entity, IP, user agent, metadata JSON
+- `audit_logs` — append-only: actor, action, entity, IP, user agent (di-parse jadi browser/OS/device type), request path, HTTP method, status, timestamp
 
 ---
 
@@ -189,13 +202,14 @@ pytest test_solutions.py
 
 ## Keputusan Teknis Utama
 
-| Topik                 | Pilihan                      | Alasan Singkat                                                 |
-| --------------------- | ---------------------------- | -------------------------------------------------------------- |
-| Password hashing      | BCrypt (strength 12)         | Salt built-in, cost factor tinggi — brute-force tidak feasible |
-| OTP storage           | Redis + BCrypt hash          | TTL otomatis, OTP diperlakukan seperti password                |
-| Refresh token storage | PostgreSQL                   | Butuh persistensi & full revocation audit trail                |
-| Access token denylist | Redis                        | Fast lookup, auto-expire sesuai sisa TTL token                 |
-| Audit ingestion       | Redis Pub/Sub                | Fully decoupled — Article Service tidak tunggu Audit Service   |
-| Audit storage         | MongoDB                      | Append-only log, schema-less, write throughput tinggi          |
-| Rate limiting         | Redis Token Bucket (gateway) | Throttle di edge, sebelum menyentuh downstream service         |
-| `shared` module       | Spring Boot library          | Centralize JWT filter & DTO — trade-off: coupling saat deploy  |
+| Topik                 | Pilihan                      | Alasan Singkat                                                    |
+| --------------------- | ---------------------------- | ----------------------------------------------------------------- |
+| Password hashing      | BCrypt (strength 12)         | Salt built-in, cost factor tinggi — brute-force tidak feasible    |
+| OTP storage           | Redis + BCrypt hash          | TTL otomatis, OTP diperlakukan seperti password                   |
+| Refresh token storage | PostgreSQL                   | Butuh persistensi & full revocation audit trail                   |
+| Access token denylist | Redis                        | Fast lookup, auto-expire sesuai sisa TTL token                    |
+| Audit ingestion       | Redis Pub/Sub                | Fully decoupled — Auth/Article Service tidak tunggu Audit Service |
+| Audit storage         | PostgreSQL                   | Konsisten dengan requirement RDBMS PostgreSQL di seluruh stack    |
+| Rate limiting         | Redis Token Bucket (gateway) | Throttle di edge, sebelum menyentuh downstream service            |
+| `shared` module       | Spring Boot library          | Centralize JWT filter & DTO — trade-off: coupling saat deploy     |
+| Test coverage         | JaCoCo, min. 80% line        | Di-enforce di `check`/`build` untuk auth/article/audit-service    |

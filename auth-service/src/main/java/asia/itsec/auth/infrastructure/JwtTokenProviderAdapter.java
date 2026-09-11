@@ -26,6 +26,7 @@ public class JwtTokenProviderAdapter implements TokenProvider {
 
         return Jwts.builder()
                 .setSubject(user.getId())
+                .claim("username", user.getUsername())
                 .claim("roles", user.getRoles().stream().map(Enum::name).collect(Collectors.toList()))
                 .setIssuedAt(now)
                 .setExpiration(validity)

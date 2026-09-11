@@ -5,6 +5,7 @@ import asia.itsec.auth.domain.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -54,5 +55,15 @@ public class UserRepositoryAdapter implements UserRepository {
     @Override
     public boolean existsByEmail(String email) {
         return jpaUserRepository.existsByEmail(email);
+    }
+
+    @Override
+    public List<User> findAll() {
+        return jpaUserRepository.findAll().stream().map(UserEntity::toDomain).collect(Collectors.toList());
+    }
+
+    @Override
+    public void deleteById(String id) {
+        jpaUserRepository.deleteById(id);
     }
 }

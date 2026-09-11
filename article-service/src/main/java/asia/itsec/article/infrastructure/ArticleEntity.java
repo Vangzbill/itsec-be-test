@@ -30,6 +30,9 @@ public class ArticleEntity {
     @Column(name = "author_id", nullable = false)
     private String authorId;
 
+    @Column(name = "is_public", nullable = false)
+    private boolean isPublic;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -42,6 +45,7 @@ public class ArticleEntity {
                 .title(title)
                 .content(content)
                 .authorId(authorId)
+                .isPublic(isPublic)
                 .createdAt(createdAt)
                 .updatedAt(updatedAt)
                 .build();
@@ -53,6 +57,7 @@ public class ArticleEntity {
                 .title(article.getTitle())
                 .content(article.getContent())
                 .authorId(article.getAuthorId())
+                .isPublic(article.isPublic())
                 .createdAt(article.getCreatedAt())
                 .updatedAt(article.getUpdatedAt())
                 .build();

@@ -42,7 +42,7 @@ public class ArticleController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('EDITOR', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('EDITOR', 'CONTRIBUTOR', 'SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<Article>> createArticle(@Valid @RequestBody CreateArticleCommand command) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String authorId = auth.getName();
@@ -57,7 +57,7 @@ public class ArticleController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('EDITOR', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('EDITOR', 'CONTRIBUTOR', 'SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<Article>> updateArticle(@PathVariable String id, @Valid @RequestBody UpdateArticleCommand command) {
         Article article = articleService.updateArticle(id, command);
         
@@ -69,7 +69,7 @@ public class ArticleController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('EDITOR', 'SUPER_ADMIN')")
     public ResponseEntity<Void> deleteArticle(@PathVariable String id) {
         articleService.deleteArticle(id);
         return ResponseEntity.noContent().build();

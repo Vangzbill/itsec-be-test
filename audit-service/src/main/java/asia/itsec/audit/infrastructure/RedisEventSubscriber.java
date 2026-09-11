@@ -1,7 +1,7 @@
 package asia.itsec.audit.infrastructure;
 
 import asia.itsec.audit.application.AuditService;
-import com.fasterxml.jackson.databind.JsonNode;
+import asia.itsec.shared.event.AuditEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.connection.Message;
@@ -15,21 +15,16 @@ import java.nio.charset.StandardCharsets;
 public class RedisEventSubscriber implements MessageListener {
 
     private final AuditService auditService;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     @Override
     public void onMessage(Message message, byte[] pattern) {
         try {
             String payload = new String(message.getBody(), StandardCharsets.UTF_8);
-            JsonNode jsonNode = objectMapper.readTree(payload);
-            
-            String event = jsonNode.get("event").asText();
-            String entityId = jsonNode.get("articleId").asText();
-            
-            auditService.recordLog(event, entityId);
-            
+            AuditEvent event = objectMapper.readValue(payload, AuditEvent.class);
+            auditService.recordLog(event);
         } catch (Exception e) {
-            System.err.println("Error processing Redis message: " + e.getMessage());
+            System.err.println("Error processing audit event: " + e.getMessage());
         }
     }
 }

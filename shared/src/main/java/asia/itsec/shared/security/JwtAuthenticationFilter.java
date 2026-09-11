@@ -34,6 +34,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         .getBody();
 
                 String userId = claims.getSubject();
+                String username = claims.get("username", String.class);
                 List<String> roles = claims.get("roles", List.class);
 
                 if (userId != null && roles != null) {
@@ -43,10 +44,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                     UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
                             userId, null, authorities);
+                    auth.setDetails(username);
                     SecurityContextHolder.getContext().setAuthentication(auth);
                 }
             } catch (Exception e) {
-                // Ignore invalid tokens; SecurityContextHolder remains empty -> unauthenticated
+                // Ignore invalid tokens;
             }
         }
 

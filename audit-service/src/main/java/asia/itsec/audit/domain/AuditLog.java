@@ -9,7 +9,18 @@ import java.time.Instant;
 @Builder
 public class AuditLog {
     private String id;
+    private String actorId;
+    private String actorUsername;
     private String action;
+    private String entityType;
     private String entityId;
-    private Instant timestamp;
+    private String ipAddress;
+    private String userAgent;
+    private String browser;
+    private String os;
+    private String deviceType;
+    private String requestPath;
+    private String httpMethod;
+    private String status;
+    private Instant createdAt;
 }
