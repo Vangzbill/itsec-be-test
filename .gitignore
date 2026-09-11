@@ -8,3 +8,7 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .gradle/
+gradle/ 
+gradlew 
+gradlew.bat
+run-all.bat
