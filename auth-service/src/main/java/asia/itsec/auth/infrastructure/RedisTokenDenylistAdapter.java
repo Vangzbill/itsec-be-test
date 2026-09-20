@@ -1,6 +1,7 @@
 package asia.itsec.auth.infrastructure;
 
 import asia.itsec.auth.domain.TokenDenylistRepository;
+import asia.itsec.shared.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
@@ -12,7 +13,7 @@ import java.time.Duration;
 public class RedisTokenDenylistAdapter implements TokenDenylistRepository {
 
     private final StringRedisTemplate redisTemplate;
-    private static final String PREFIX = "denylist:";
+    private static final String PREFIX = JwtAuthenticationFilter.DENYLIST_PREFIX;
 
     @Override
     public void denylist(String token, long remainingTtlSeconds) {

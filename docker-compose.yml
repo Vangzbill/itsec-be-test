@@ -55,7 +55,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-secret}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - JWT_SECRET=${JWT_SECRET:-supersecretkey12345678901234567890}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set in .env}
     depends_on:
       postgres:
         condition: service_healthy
@@ -88,7 +88,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-secret}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - JWT_SECRET=${JWT_SECRET:-supersecretkey12345678901234567890}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set in .env}
       - SMTP_HOST=mailpit
       - SMTP_PORT=1025
     depends_on:
@@ -119,7 +119,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-secret}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - JWT_SECRET=${JWT_SECRET:-supersecretkey12345678901234567890}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set in .env}
     depends_on:
       postgres:
         condition: service_healthy

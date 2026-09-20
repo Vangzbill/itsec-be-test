@@ -6,6 +6,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -16,6 +17,14 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    public static final String DENYLIST_PREFIX = "denylist:";
+
+    private final StringRedisTemplate redisTemplate;
+
+    public JwtAuthenticationFilter(StringRedisTemplate redisTemplate) {
+        this.redisTemplate = redisTemplate;
+    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -32,6 +41,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         .build()
                         .parseClaimsJws(token)
                         .getBody();
+
+                if (Boolean.TRUE.equals(redisTemplate.hasKey(DENYLIST_PREFIX + token))) {
+                    filterChain.doFilter(request, response); // logged-out token: stay anonymous
+                    return;
+                }
 
                 String userId = claims.getSubject();
                 String username = claims.get("username", String.class);

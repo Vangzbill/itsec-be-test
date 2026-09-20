@@ -213,3 +213,17 @@ pytest test_solutions.py
 | Rate limiting         | Redis Token Bucket (gateway) | Throttle di edge, sebelum menyentuh downstream service            |
 | `shared` module       | Spring Boot library          | Centralize JWT filter & DTO — trade-off: coupling saat deploy     |
 | Test coverage         | JaCoCo, min. 80% line        | Di-enforce di `check`/`build` untuk auth/article/audit-service    |
+
+---
+
+## Known Limitations
+
+Sengaja tidak dikerjakan untuk scope technical test ini; dicatat agar keputusan desainnya transparan:
+
+| Area | Kondisi sekarang | Perbaikan yang disarankan |
+| ---- | ---------------- | ------------------------- |
+| Refresh token | Tidak dirotasi; token yang sama valid sampai 7 hari atau di-revoke | Rotasi tiap `/auth/refresh` + deteksi reuse token lama |
+| Sanitasi input | `title`/`content` artikel dan `User-Agent` audit log disimpan mentah (risiko stored XSS jika client merender sebagai HTML) | Sanitasi HTML saat simpan (OWASP Java HTML Sanitizer); client render sebagai teks |
+| CSP | Tidak ada header `Content-Security-Policy` | Tambahkan CSP di `SecurityConfig` |
+| Audit event | Redis Pub/Sub tanpa persistence; event hilang jika audit-service down | Message broker durable (Kafka/RabbitMQ) atau Redis Streams |
+| Integration test | Hanya unit test (mock); belum ada test adapter terhadap Postgres/Redis asli | Testcontainers |

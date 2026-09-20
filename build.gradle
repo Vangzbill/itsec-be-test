@@ -37,6 +37,7 @@ subprojects {
 
     test {
         useJUnitPlatform()
+        environment 'JWT_SECRET', 'test-only-secret-key-0123456789abcdef'
         finalizedBy jacocoTestReport
     }
 
