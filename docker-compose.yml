@@ -56,6 +56,9 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set in .env}
+      - AUTH_HOST=auth-service
+      - ARTICLE_HOST=article-service
+      - AUDIT_HOST=audit-service
     depends_on:
       postgres:
         condition: service_healthy
@@ -146,6 +149,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-secret}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set in .env}
     depends_on:
       postgres:
         condition: service_healthy
